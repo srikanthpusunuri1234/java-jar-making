@@ -1,0 +1,14 @@
+[Unit]
+Description=My Java Application
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/app
+ExecStart=/usr/bin/java -jar app.jar
+SuccessExitStatus=143
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
