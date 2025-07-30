@@ -21,7 +21,7 @@ jobs:
       - name: Build the JAR
         run: mvn clean package -DskipTests
 
-      - name: Setup SSH Key
+      - name: Prepare SSH Access
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
@@ -33,81 +33,41 @@ jobs:
       - name: Deploy to All Servers
         run: |
           for ip in ${{ secrets.SERVER_1_IP }} ${{ secrets.SERVER_2_IP }}; do
-            echo "Deploying to $ip"
+            echo "=== Deploying to $ip ==="
 
-            ssh ${{ secrets.SERVER_USER }}@$ip <<EOF
+            # Ensure app directory exists
+            ssh ${{ secrets.SERVER_USER }}@$ip "mkdir -p ~/app"
+
+            # Upload app files
+            scp target/*.jar ${{ secrets.SERVER_USER }}@$ip:~/app/app.jar
+            scp deploy/myapp.service ${{ secrets.SERVER_USER }}@$ip:~/myapp.service
+            scp deploy/nginx.conf ${{ secrets.SERVER_USER }}@$ip:~/nginx.conf
+
+            # Install Java, setup systemd and NGINX
+            ssh ${{ secrets.SERVER_USER }}@$ip << EOCMD
               set -e
 
-              # Install Java if not present
-              if ! java -version &>/dev/null; then
+              # Install Java if missing
+              if ! command -v java >/dev/null; then
                 sudo apt update
                 sudo apt install -y openjdk-17-jdk
               fi
 
-              # Create app folder
-              mkdir -p ~/app
-EOF
-
-            # Copy JAR file
-            scp target/*.jar ${{ secrets.SERVER_USER }}@$ip:~/app/app.jar
-
-            # Copy systemd unit file
-            ssh ${{ secrets.SERVER_USER }}@$ip "cat > ~/myapp.service" <<'EOF'
-[Unit]
-Description=My Java Application
-After=network.target
-
-[Service]
-User=ubuntu
-WorkingDirectory=/home/ubuntu/app
-ExecStart=/usr/bin/env java -jar app.jar
-SuccessExitStatus=143
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-            # Move systemd file and restart
-            ssh ${{ secrets.SERVER_USER }}@$ip <<EOF
+              # Setup systemd service
               sudo mv ~/myapp.service /etc/systemd/system/myapp.service
               sudo systemctl daemon-reload
               sudo systemctl enable myapp
               sudo systemctl restart myapp
-EOF
 
-            # Copy and configure NGINX
-            ssh ${{ secrets.SERVER_USER }}@$ip <<'EOF'
-              set -e
-
-              # Install NGINX if not installed
-              if ! which nginx > /dev/null; then
+              # Install and configure NGINX
+              if ! command -v nginx >/dev/null; then
                 sudo apt update
                 sudo apt install -y nginx
               fi
 
-              # Write nginx config
-              cat <<NGINX | sudo tee /etc/nginx/sites-available/myapp > /dev/null
-server {
-    listen 80;
-    server_name _;
-
-    location / {
-        proxy_pass http://localhost:8080;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-}
-NGINX
-
-              # Enable site and reload nginx
+              sudo mv ~/nginx.conf /etc/nginx/sites-available/myapp
               sudo ln -sf /etc/nginx/sites-available/myapp /etc/nginx/sites-enabled/myapp
               sudo rm -f /etc/nginx/sites-enabled/default
               sudo nginx -t
               sudo systemctl reload nginx
-EOF
-
           done
