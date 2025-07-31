@@ -41,7 +41,7 @@ jobs:
             scp deploy/nginx.conf ${{ secrets.SERVER_USER }}@$ip:~/nginx.conf
 
             # Create remote-setup.sh line by line
-            cat << 'REMOTE_SCRIPT_EOF' > remote-setup.sh
+            cat << `REMOTE_SCRIPT_EOF' > remote-setup.sh
             #!/bin/bash
             set -e
         
