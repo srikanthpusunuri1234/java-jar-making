@@ -26,7 +26,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          for ip in ${{ secrets.SERVER_1_IP }}; do
+          for ip in ${{ secrets.SERVER_1_IP }} ${{ secrets.SERVER_2_IP }}; do
             ssh-keyscan -H $ip >> ~/.ssh/known_hosts
           done
 
@@ -60,7 +60,7 @@ jobs:
 
       - name: Deploy to All Servers
         run: |
-          for ip in ${{ secrets.SERVER_1_IP }}; do
+          for ip in ${{ secrets.SERVER_1_IP }} ${{ secrets.SERVER_2_IP }}; do
             echo "=== Deploying to $ip ==="
             ssh ${{ secrets.SERVER_USER }}@$ip "mkdir -p ~/app"
             scp target/*.jar ${{ secrets.SERVER_USER }}@$ip:~/app/app.jar
